@@ -1,82 +1,138 @@
 import os
 import sys
-import argparse
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "repo_loader"))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "chunking"))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "embeddings"))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "vector_db"))
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(BASE_DIR, "repo_loader"))
+sys.path.insert(0, os.path.join(BASE_DIR, "chunking"))
+sys.path.insert(0, os.path.join(BASE_DIR, "embeddings"))
+sys.path.insert(0, os.path.join(BASE_DIR, "vector_db"))
+sys.path.insert(0, os.path.join(BASE_DIR, "rag"))
+sys.path.insert(0, os.path.join(BASE_DIR, "reasoning"))
+sys.path.insert(0, os.path.join(BASE_DIR, "generator"))
 
 from github_loader import load_github_repo
 from chunker import chunk_repo
 from embedder import create_embeddings
 from faiss_index import FaissIndex
+from retriever import Retriever
+from query_decomposer import QueryDecomposer
+from safety_check import SafetyCheck
+from prompt_builder import build_prompt
+from answer_generator import AnswerGenerator
 
 
-def run_pipeline(repo_url=None):
-    print("\n" + "=" * 80)
-    print("RepoPilotAI - Full Pipeline Execution")
-    print("=" * 80)
-    
-    temp_folder_path = None
-    
-    if repo_url:
-        print(f"\n📥 Step 1: Downloading repository from GitHub...")
-        print(f"   URL: {repo_url}")
-        result = load_github_repo(repo_url)
-        temp_folder_path = result["temp_path"]
-        print(f"   ✓ Downloaded {result['files_count']} files")
-        print(f"   ✓ Saved to: {temp_folder_path}")
-    else:
-        print("\n📁 Step 1: Using existing repository files...")
-        print("   No URL provided, using latest temp folder")
-    
-    print(f"\n🔪 Step 2: Chunking files...")
-    chunks = chunk_repo(temp_folder_path)
-    print(f"   ✓ Created {len(chunks)} chunks")
-    
-    if len(chunks) == 0:
-        print("\n⚠️  WARNING: No chunks created. Check if files match allowed extensions.")
-        return
-    
-    print(f"\n🧠 Step 3: Generating embeddings...")
-    embedded_chunks = create_embeddings(chunks)
-    print(f"   ✓ Generated embeddings for {len(embedded_chunks)} chunks")
-    
-    print(f"\n💾 Step 4: Building FAISS index...")
-    faiss_index = FaissIndex()
-    faiss_index.add(embedded_chunks)
-    faiss_index.save()
-    print(f"   ✓ FAISS index built and saved")
-    
-    print("\n" + "=" * 80)
-    print("✅ Pipeline execution complete!")
-    print("=" * 80)
-    print(f"\nSummary:")
-    print(f"  - Repository files: {temp_folder_path or 'latest temp folder'}")
-    print(f"  - Total chunks: {len(chunks)}")
-    print(f"  - Vector dimension: {faiss_index.vector_dim}")
-    print(f"  - Index location: {faiss_index.index_path}")
-    print("\nYou can now use the retriever to query this repository!")
-    print("=" * 80 + "\n")
+FAISS_INDEX_PATH = os.path.join(BASE_DIR, "data", "vector_store", "index.faiss")
+API_PORT = int(os.getenv("PORT", "5000"))
+DEBUG_MODE = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+
+app = Flask(__name__)
+CORS(app)
+
+retriever_instance = None
+answer_generator_instance = None
+query_decomposer = QueryDecomposer()
+safety_checker = SafetyCheck()
+
+
+def _get_retriever():
+    global retriever_instance
+    if retriever_instance is None:
+        retriever_instance = Retriever(faiss_index_path=FAISS_INDEX_PATH)
+    return retriever_instance
+
+
+def _get_answer_generator():
+    global answer_generator_instance
+    if answer_generator_instance is None:
+        answer_generator_instance = AnswerGenerator()
+    return answer_generator_instance
+
+
+@app.route("/index_repo", methods=["POST"])
+def index_repo():
+    payload = request.get_json(silent=True) or {}
+    repo_url = payload.get("repo_url")
+
+    try:
+        temp_folder_path = None
+        files_count = None
+
+        if repo_url:
+            result = load_github_repo(repo_url)
+            temp_folder_path = result["temp_path"]
+            files_count = result["files_count"]
+
+        chunks = chunk_repo(temp_folder_path)
+        if not chunks:
+            return jsonify({
+                "success": False,
+                "message": "No chunks created. Check if files match allowed extensions."
+            }), 400
+
+        embedded_chunks = create_embeddings(chunks)
+        faiss_index = FaissIndex(index_path=FAISS_INDEX_PATH)
+        faiss_index.add(embedded_chunks)
+        faiss_index.save()
+
+        global retriever_instance
+        retriever_instance = Retriever(faiss_index_path=FAISS_INDEX_PATH)
+
+        return jsonify({
+            "success": True,
+            "message": "Indexing complete",
+            "files_count": files_count,
+            "chunks_count": len(chunks),
+            "index_path": faiss_index.index_path
+        })
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)}), 500
+
+
+@app.route("/ask", methods=["POST"])
+def ask_question():
+    payload = request.get_json(silent=True) or {}
+    question = payload.get("question", "").strip()
+
+    if not question:
+        return jsonify({"success": False, "message": "question is required"}), 400
+
+    try:
+        retriever = _get_retriever()
+        chunks = retriever.retrieve(question, top_k=int(payload.get("top_k", 5)))
+
+        question_type = query_decomposer.decompose(question)
+        safety_result = safety_checker.check(question_type, chunks)
+
+        if not safety_result.get("allowed"):
+            return jsonify({
+                "success": False,
+                "message": safety_result.get("reason", "Unsafe to answer"),
+                "question_type": question_type,
+                "safety": safety_result,
+            }), 200
+
+        prompt = build_prompt(question, chunks)
+        generator = _get_answer_generator()
+        answer = generator.generate(prompt)
+
+        return jsonify({
+            "success": True,
+            "answer": answer,
+            "question_type": question_type,
+            "safety": safety_result,
+            "chunks_used": len(chunks),
+        })
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)}), 500
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok"})
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="RepoPilotAI - Process GitHub repositories for RAG-based code search"
-    )
-    parser.add_argument(
-        "--repo",
-        "-r",
-        type=str,
-        help="GitHub repository URL (e.g., https://github.com/user/repo)",
-        default=None
-    )
-    
-    args = parser.parse_args()
-    
-    try:
-        run_pipeline(repo_url=args.repo)
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
-        sys.exit(1)
+    app.run(host="0.0.0.0", port=API_PORT, debug=DEBUG_MODE)
