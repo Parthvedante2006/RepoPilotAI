@@ -1,4 +1,4 @@
 requests
-PyGithub
 python-dotenv
-chardet
+sentence-transformers
+faiss-cpu
