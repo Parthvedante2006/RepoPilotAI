@@ -395,7 +395,6 @@ RepoPilot AI satisfies the core requirements of GDGC PCCOE Problem Statement 7:
 
 ## 🚀 Future Scope
 
-- 💬 **Conversation memory** — Multi-turn follow-up queries
 - 📊 **Architecture diagrams** — Auto-generate from code structure
 - 🔗 **Multi-repository support** — Ask across multiple repos
 - 🎨 **IDE integration** — VS Code extension
@@ -451,23 +450,6 @@ LLM_MODEL = "gemini-1.5-pro"
 LLM_TEMPERATURE = 0.3
 ```
 
----
-
-## 🐛 Troubleshooting
-
-### Issue: "Rate limit exceeded" on GitHub API
-→ Ensure `GITHUB_TOKEN` is set in `.env` for higher limits
-
-### Issue: FAISS index not found
-→ Run `/index_repo` endpoint first to create the index
-
-### Issue: Gemini API errors
-→ Verify `GEMINI_API_KEY` is correct and account has API access
-
-### Issue: Low relevance in responses
-→ Increase `TOP_K_RETRIEVAL` or decrease `DISTANCE_THRESHOLD`
-
----
 
 ## 🤝 Contributing
 
