@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "embeddings"))
@@ -29,7 +30,7 @@ class Retriever:
         if self.vector_dim is None:
             self.vector_dim = self.faiss.vector_dim
 
-    def retrieve(self, question, top_k=5):
+    def retrieve(self, question, top_k=5, intent=None):
         if not question or not isinstance(question, str):
             raise ValueError("question must be a non-empty string")
         
@@ -48,8 +49,38 @@ class Retriever:
             )
         
         results = self.faiss.search(query_vector, top_k=top_k)
+
+        if intent == "location":
+            results = _prioritize_function_chunks(question, results)
         
         return results
+
+
+def _tokenize_query(text):
+    tokens = re.split(r"[^A-Za-z0-9_]+", text.lower())
+    return [t for t in tokens if t]
+
+
+def _prioritize_function_chunks(question, results):
+    tokens = _tokenize_query(question)
+    function_chunks = []
+    other_chunks = []
+
+    for chunk in results:
+        if chunk.get("chunk_type") == "function" and chunk.get("symbol_name"):
+            symbol = chunk.get("symbol_name", "").lower()
+            score = 0
+            if symbol in question.lower():
+                score += 3
+            score += sum(1 for t in tokens if t and t in symbol)
+            function_chunks.append((score, chunk))
+        else:
+            other_chunks.append(chunk)
+
+    function_chunks.sort(key=lambda item: item[0], reverse=True)
+    prioritized = [chunk for score, chunk in function_chunks if score > 0]
+
+    return prioritized + other_chunks
 
 
 if __name__ == "__main__":
@@ -85,20 +116,20 @@ if __name__ == "__main__":
     print(f"\n📝 Question: {args.question}\n")
     
     try:
-        print("🔍 Step 1: Retrieving relevant code chunks...")
+        print("🧠 Step 1: Analyzing question intent...")
+        decomposer = QueryDecomposer()
+        question_type = decomposer.decompose(args.question)
+        print(f"   ✓ Question intent: {question_type['intent']}")
+        print(f"   ✓ Confidence: {question_type['confidence']}")
+        print(f"   ✓ Reason: {question_type['reason']}\n")
+
+        print("🔍 Step 2: Retrieving relevant code chunks...")
         retriever = Retriever(faiss_index_path=args.index_path)
         print(f"   ✓ Loaded FAISS index (dimension: {retriever.vector_dim})")
         print(f"   ✓ Index contains {retriever.faiss.index.ntotal} vectors")
         
-        chunks = retriever.retrieve(args.question, top_k=args.top_k)
+        chunks = retriever.retrieve(args.question, top_k=args.top_k, intent=question_type.get("intent"))
         print(f"   ✓ Found {len(chunks)} relevant chunks\n")
-        
-        print("🧠 Step 2: Analyzing question intent...")
-        decomposer = QueryDecomposer()
-        question_type = decomposer.decompose(args.question)
-        print(f"   ✓ Question type: {question_type['type']}")
-        print(f"   ✓ Confidence: {question_type['confidence']}")
-        print(f"   ✓ Reason: {question_type['reason']}\n")
         
         print("🛡️  Step 3: Safety check...")
         safety_checker = SafetyCheck()
@@ -117,7 +148,7 @@ if __name__ == "__main__":
         print()
         
         print("📋 Step 4: Building prompt...")
-        prompt = build_prompt(args.question, chunks)
+        prompt = build_prompt(args.question, chunks, question_meta=question_type)
         print(f"   ✓ Prompt built ({len(prompt)} characters)\n")
         
         print("🤖 Step 5: Generating answer with Gemini...")

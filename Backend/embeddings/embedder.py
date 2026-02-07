@@ -37,6 +37,11 @@ def create_embeddings(chunks):
             "text": chunk["text"],
             "file": chunk["file"],
             "chunk_id": chunk["chunk_id"],
+            "chunk_type": chunk.get("chunk_type"),
+            "symbol_name": chunk.get("symbol_name"),
+            "start_line": chunk.get("start_line"),
+            "end_line": chunk.get("end_line"),
+            "code": chunk.get("code"),
             "vector": vectors[i]
         })
 

@@ -1,4 +1,4 @@
-def build_prompt(question, retrieved_chunks):
+def build_prompt(question, retrieved_chunks, question_meta=None, overview_signals=None):
     if not question or not isinstance(question, str):
         raise ValueError("question must be a non-empty string")
     

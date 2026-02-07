@@ -41,7 +41,12 @@ class FaissIndex:
             self.metadata.append({
                 "file": chunk["file"],
                 "chunk_id": chunk["chunk_id"],
-                "text": chunk["text"]
+                "text": chunk["text"],
+                "chunk_type": chunk.get("chunk_type"),
+                "symbol_name": chunk.get("symbol_name"),
+                "start_line": chunk.get("start_line"),
+                "end_line": chunk.get("end_line"),
+                "code": chunk.get("code"),
             })
 
         vectors = np.array(vectors).astype("float32")

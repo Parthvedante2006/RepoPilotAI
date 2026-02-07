@@ -3,6 +3,21 @@ import re
 
 WORD_CHUNK_SIZE = 300 
 
+PYTHON_FUNC_PATTERN = re.compile(r"^\s*def\s+(\w+)\s*\(")
+PYTHON_CLASS_PATTERN = re.compile(r"^\s*class\s+\w+")
+BRACE_FUNC_PATTERN = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*\(")
+CONTROL_KEYWORDS = {
+    "if",
+    "for",
+    "while",
+    "switch",
+    "catch",
+    "else",
+    "do",
+}
+
+FUNC_EXTENSIONS = {".py", ".c", ".cpp", ".h", ".java", ".cs", ".js", ".ts"}
+
 
 def chunk_by_words(text, max_words=WORD_CHUNK_SIZE):
     words = text.split()
@@ -68,6 +83,87 @@ def _latest_repo_temp_dir(base_dir: str) -> str:
     return max(candidates, key=lambda p: os.path.getmtime(p))
 
 
+def _extract_python_functions(lines):
+    functions = []
+    for idx, line in enumerate(lines):
+        match = PYTHON_FUNC_PATTERN.match(line)
+        if not match:
+            continue
+
+        name = match.group(1)
+        indent = len(line) - len(line.lstrip(" "))
+        start = idx
+        end = len(lines) - 1
+
+        for j in range(idx + 1, len(lines)):
+            next_line = lines[j]
+            if PYTHON_FUNC_PATTERN.match(next_line) or PYTHON_CLASS_PATTERN.match(next_line):
+                next_indent = len(next_line) - len(next_line.lstrip(" "))
+                if next_indent <= indent:
+                    end = j - 1
+                    break
+
+        code = "".join(lines[start:end + 1]).rstrip()
+        functions.append({
+            "chunk_type": "function",
+            "symbol_name": name,
+            "start_line": start + 1,
+            "end_line": end + 1,
+            "code": code,
+        })
+
+    return functions
+
+
+def _extract_brace_functions(lines):
+    functions = []
+    idx = 0
+    while idx < len(lines):
+        line = lines[idx]
+        stripped = line.strip()
+        lower = stripped.lower()
+
+        if not stripped or any(lower.startswith(k + " ") or lower == k for k in CONTROL_KEYWORDS):
+            idx += 1
+            continue
+
+        if "(" not in line or ")" not in line or "{" not in line:
+            idx += 1
+            continue
+
+        name_match = BRACE_FUNC_PATTERN.search(line)
+        if not name_match:
+            idx += 1
+            continue
+
+        name = name_match.group(1)
+        start = idx
+        brace_count = line.count("{") - line.count("}")
+        end = idx
+
+        j = idx + 1
+        while j < len(lines) and brace_count > 0:
+            brace_count += lines[j].count("{") - lines[j].count("}")
+            end = j
+            j += 1
+
+        if brace_count <= 0:
+            code = "".join(lines[start:end + 1]).rstrip()
+            functions.append({
+                "chunk_type": "function",
+                "symbol_name": name,
+                "start_line": start + 1,
+                "end_line": end + 1,
+                "code": code,
+            })
+            idx = end + 1
+            continue
+
+        idx += 1
+
+    return functions
+
+
 def chunk_repo(temp_folder_path=None):
     if not temp_folder_path:
         backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -87,19 +183,53 @@ def chunk_repo(temp_folder_path=None):
                 if not content.strip():
                     continue
 
-                if file.endswith(".py"):
-                    chunks = chunk_python_by_structure(content)
-                else:
-                    chunks = chunk_by_structure_generic(content) or chunk_by_words(content)
-
                 rel_path = os.path.relpath(file_path, start=temp_folder_path)
-                for idx, chunk in enumerate(chunks):
-                    if chunk.strip():
+                ext = os.path.splitext(file)[1].lower()
+
+                chunk_id = 0
+
+                if ext in FUNC_EXTENSIONS:
+                    lines = content.splitlines(keepends=True)
+                    if ext == ".py":
+                        function_chunks = _extract_python_functions(lines)
+                    else:
+                        function_chunks = _extract_brace_functions(lines)
+
+                    for chunk in function_chunks:
                         all_chunks.append({
-                            "text": chunk,
+                            "text": chunk["code"],
+                            "code": chunk["code"],
+                            "chunk_type": chunk["chunk_type"],
+                            "symbol_name": chunk["symbol_name"],
                             "file": rel_path,
-                            "chunk_id": idx
+                            "chunk_id": chunk_id,
+                            "start_line": chunk["start_line"],
+                            "end_line": chunk["end_line"],
                         })
+                        chunk_id += 1
+
+                    if not function_chunks:
+                        chunks = chunk_by_words(content)
+                        for chunk in chunks:
+                            if chunk.strip():
+                                all_chunks.append({
+                                    "text": chunk,
+                                    "chunk_type": "text",
+                                    "file": rel_path,
+                                    "chunk_id": chunk_id,
+                                })
+                                chunk_id += 1
+                else:
+                    chunks = chunk_by_words(content)
+                    for chunk in chunks:
+                        if chunk.strip():
+                            all_chunks.append({
+                                "text": chunk,
+                                "chunk_type": "text",
+                                "file": rel_path,
+                                "chunk_id": chunk_id,
+                            })
+                            chunk_id += 1
 
             except Exception as e:
                 print(f"Skipping {file_path}: {e}")
