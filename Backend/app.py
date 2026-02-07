@@ -25,7 +25,7 @@ from answer_generator import AnswerGenerator
 
 
 FAISS_INDEX_PATH = os.path.join(BASE_DIR, "data", "vector_store", "index.faiss")
-API_PORT = int(os.getenv("PORT", "5000"))
+API_PORT = int(os.getenv("PORT", "5001"))
 DEBUG_MODE = os.getenv("FLASK_DEBUG", "false").lower() == "true"
 
 app = Flask(__name__)
