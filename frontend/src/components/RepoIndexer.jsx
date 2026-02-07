@@ -1,7 +1,7 @@
 // src/components/RepoIndexer.jsx
 import { useState } from 'react';
 
-function RepoIndexer({ onIndex, status, error }) {
+function RepoIndexer({ onIndex, status, error, bigVersion = false }) {
   const [repoUrl, setRepoUrl] = useState('');
 
   const handleSubmit = (e) => {
@@ -12,40 +12,65 @@ function RepoIndexer({ onIndex, status, error }) {
   };
 
   return (
-    <div className="w-full max-w-lg mx-auto">
-      <form 
-        onSubmit={handleSubmit} 
-        className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 border border-gray-200 dark:border-gray-700 transform transition-all hover:shadow-2xl"
+    <div className={`w-full ${bigVersion ? 'max-w-4xl' : 'max-w-2xl'} mx-auto`}>
+      <form
+        onSubmit={handleSubmit}
+        className="bg-gradient-to-b from-gray-900 to-gray-950 rounded-2xl border border-gray-700/60 shadow-2xl backdrop-blur-sm p-8 md:p-10 transition-all duration-300 hover:shadow-cyan-500/10 hover:border-cyan-500/40"
       >
-        <label htmlFor="repoUrl" className="block text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">
+        <label
+          htmlFor="repoUrl"
+          className="block text-xl font-semibold text-gray-100 mb-4 tracking-wide"
+        >
           GitHub Repository URL
         </label>
-        <input
-          type="url"
-          id="repoUrl"
-          value={repoUrl}
-          onChange={(e) => setRepoUrl(e.target.value)}
-          className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-base placeholder-gray-500 dark:placeholder-gray-400 transition"
-          placeholder="https://github.com/username/repository"
-          required
-        />
+
+        <div className="relative">
+          <input
+            type="url"
+            id="repoUrl"
+            value={repoUrl}
+            onChange={(e) => setRepoUrl(e.target.value)}
+            placeholder="https://github.com/username/repository"
+            required
+            className="w-full px-6 py-5 bg-gray-800/60 border border-gray-600 rounded-xl text-gray-100 placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/30 transition-all duration-200 text-lg"
+          />
+          <div className="absolute inset-y-0 right-0 flex items-center pr-5 pointer-events-none">
+            <span className="text-gray-500 text-sm">https://</span>
+          </div>
+        </div>
+
         <button
           type="submit"
-          className="mt-6 w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium py-4 px-6 rounded-xl shadow-lg transform transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           disabled={!!status}
+          className={`mt-8 w-full py-5 px-8 rounded-xl font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-3 shadow-lg ${
+            status
+              ? 'bg-gray-700 cursor-not-allowed text-gray-400'
+              : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white hover:shadow-cyan-500/30 hover:scale-[1.02]'
+          }`}
         >
-          {status ? 'Indexing...' : 'Analyze Repository'}
+          {status ? (
+            <>
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              Indexing...
+            </>
+          ) : (
+            <>
+              Analyze Repository
+              <span className="text-xl">⚡</span>
+            </>
+          )}
         </button>
 
-        {status && (
-          <p className="mt-5 text-center text-indigo-600 dark:text-indigo-400 font-medium animate-pulse">
+        {status && !error && (
+          <p className="mt-6 text-center text-cyan-400 font-medium animate-pulse tracking-wide">
             {status}
           </p>
         )}
+
         {error && (
-          <p className="mt-5 text-center text-red-600 dark:text-red-400 font-medium">
+          <div className="mt-6 bg-red-950/40 border border-red-800/50 rounded-xl p-4 text-red-300 text-center text-sm">
             {error}
-          </p>
+          </div>
         )}
       </form>
     </div>
