@@ -1,5 +1,5 @@
 class SafetyCheck:
-    def __init__(self, min_chunks=2, min_text_length=50, max_distance=1.0):
+    def __init__(self, min_chunks=2, min_text_length=50, max_distance=1.6):
         self.min_chunks = min_chunks
         self.min_text_length = min_text_length
         self.max_distance = max_distance
@@ -35,7 +35,8 @@ class SafetyCheck:
                 "reason": "Retrieved chunks are too short or empty"
             }
         
-        if "distance" in retrieved_chunks[0]:
+        strict_retrieval = question_type.get("strict_retrieval", True)
+        if strict_retrieval and "distance" in retrieved_chunks[0]:
             avg_distance = sum(c.get("distance", 0) for c in retrieved_chunks) / len(retrieved_chunks)
             if avg_distance > self.max_distance:
                 return {
@@ -43,7 +44,7 @@ class SafetyCheck:
                     "reason": f"Retrieved chunks are not relevant enough (avg distance: {avg_distance:.2f})"
                 }
         
-        if question_type.get("type") == "overview" and len(valid_chunks) < 5:
+        if question_type.get("intent") == "overview" and len(valid_chunks) < 5:
             return {
                 "allowed": False,
                 "reason": "Overview questions require more context (need at least 5 chunks)"

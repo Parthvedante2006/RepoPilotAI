@@ -19,6 +19,7 @@ from embedder import create_embeddings
 from faiss_index import FaissIndex
 from retriever import Retriever
 from query_decomposer import QueryDecomposer
+from overview_signals import extract_overview_signals
 from safety_check import SafetyCheck
 from prompt_builder import build_prompt
 from answer_generator import AnswerGenerator
@@ -114,7 +115,10 @@ def ask_question():
                 "safety": safety_result,
             }), 200
 
-        prompt = build_prompt(question, chunks)
+        overview_signals = None
+        if question_type.get("intent") == "overview":
+            overview_signals = extract_overview_signals(chunks)
+        prompt = build_prompt(question, chunks, question_meta=question_type, overview_signals=overview_signals)
         generator = _get_answer_generator()
         answer = generator.generate(prompt)
 

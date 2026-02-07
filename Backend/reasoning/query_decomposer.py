@@ -3,6 +3,33 @@ import re
 
 class QueryDecomposer:
     def __init__(self):
+        self.intent_policy = {
+            "location": {
+                "scope": "narrow",
+                "strict_retrieval": True,
+                "allow_fallback_sources": [],
+            },
+            "explanation": {
+                "scope": "medium",
+                "strict_retrieval": True,
+                "allow_fallback_sources": [],
+            },
+            "impact": {
+                "scope": "medium",
+                "strict_retrieval": True,
+                "allow_fallback_sources": [],
+            },
+            "overview": {
+                "scope": "global",
+                "strict_retrieval": False,
+                "allow_fallback_sources": ["README", "entry_points"],
+            },
+            "unknown": {
+                "scope": "unknown",
+                "strict_retrieval": True,
+                "allow_fallback_sources": [],
+            },
+        }
         self.patterns = {
             "location": [
                 r"\bwhere\s+(is|are|does)\b",
@@ -38,12 +65,28 @@ class QueryDecomposer:
     
     def decompose(self, question):
         if not question or not isinstance(question, str):
-            return {"type": "unknown", "confidence": "low", "reason": "Empty or invalid question"}
+            policy = self.intent_policy["unknown"]
+            return {
+                "intent": "unknown",
+                "confidence": "low",
+                "scope": policy["scope"],
+                "strict_retrieval": policy["strict_retrieval"],
+                "allow_fallback_sources": policy["allow_fallback_sources"],
+                "reason": "Empty or invalid question",
+            }
         
         question_lower = question.lower().strip()
         
         if len(question_lower) < 3:
-            return {"type": "unknown", "confidence": "low", "reason": "Question too short"}
+            policy = self.intent_policy["unknown"]
+            return {
+                "intent": "unknown",
+                "confidence": "low",
+                "scope": policy["scope"],
+                "strict_retrieval": policy["strict_retrieval"],
+                "allow_fallback_sources": policy["allow_fallback_sources"],
+                "reason": "Question too short",
+            }
         
         scores = {qtype: 0 for qtype in self.patterns}
         
@@ -55,16 +98,28 @@ class QueryDecomposer:
         max_score = max(scores.values())
         
         if max_score == 0:
-            return {"type": "unknown", "confidence": "low", "reason": "No recognizable intent pattern"}
+            policy = self.intent_policy["unknown"]
+            return {
+                "intent": "unknown",
+                "confidence": "low",
+                "scope": policy["scope"],
+                "strict_retrieval": policy["strict_retrieval"],
+                "allow_fallback_sources": policy["allow_fallback_sources"],
+                "reason": "No recognizable intent pattern",
+            }
         
-        detected_type = max(scores, key=scores.get)
+        detected_type = "overview" if scores.get("overview", 0) > 0 else max(scores, key=scores.get)
         
         confidence = "high" if max_score >= 2 else "medium" if max_score == 1 else "low"
+        policy = self.intent_policy.get(detected_type, self.intent_policy["unknown"])
         
         return {
-            "type": detected_type,
+            "intent": detected_type,
             "confidence": confidence,
-            "reason": f"Matched {max_score} pattern(s) for {detected_type}"
+            "scope": policy["scope"],
+            "strict_retrieval": policy["strict_retrieval"],
+            "allow_fallback_sources": policy["allow_fallback_sources"],
+            "reason": f"Matched {max_score} pattern(s) for {detected_type}",
         }
 
 

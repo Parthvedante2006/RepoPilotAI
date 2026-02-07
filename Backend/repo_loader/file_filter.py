@@ -16,6 +16,12 @@ ALLOWED_EXTENSIONS = {
 	".yaml",
 	".xml",
     ".html",
+	".cs",          # Main C# source files (MOST IMPORTANT)
+	".csproj",      # C# project file
+	".resx",        # Windows Forms resources (UI data)
+	".config", 
+	".sln",         # Visual Studio solution file
+	".designer.cs",
 	
 }
 
