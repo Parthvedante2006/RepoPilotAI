@@ -461,11 +461,6 @@ LLM_TEMPERATURE = 0.3
 
 ---
 
-## 📄 License
-
-This project is licensed under the MIT License. See [LICENSE](LICENSE) file for details.
-
----
 
 ## 👥 Team
 
@@ -475,14 +470,6 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) file for 
 
 ---
 
-## 📞 Support
-
-For issues, questions, or feedback:
-- 📧 Email: support@repopilot.ai
-- 🐛 GitHub Issues: [Report a bug](https://github.com/yourusername/RepoPilotAI/issues)
-- 💬 Discussions: [Ask a question](https://github.com/yourusername/RepoPilotAI/discussions)
-
----
 
 ## 🌟 Acknowledgments
 
@@ -494,6 +481,4 @@ For issues, questions, or feedback:
 
 ---
 
-**Built with ❤️ at GDGC PCCOE**
 
-⭐ If you find this useful, please star the repository!
