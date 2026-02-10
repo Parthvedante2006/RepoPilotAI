@@ -4,7 +4,6 @@
 
 RepoPilot AI is an AI-powered engineering assistant that helps developers understand large GitHub repositories by chatting directly with the code. It treats a single repository as the sole source of truth, enabling accurate, grounded answers without hallucinations.
 
-Built with a strong focus on **repository grounding**, **explainability**, and **safe reasoning** for GDGC PCCOE Problem Statement 7.
 
 ---
 
